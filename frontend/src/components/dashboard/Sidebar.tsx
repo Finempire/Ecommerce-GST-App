@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
     FiHome, FiUpload, FiFileText, FiPieChart, FiSettings,
-    FiLogOut, FiUser, FiChevronDown, FiBell
+    FiLogOut, FiChevronDown, FiBell, FiMenu
 } from 'react-icons/fi';
 import { useAuth } from '@/context/AuthContext';
 
@@ -16,12 +16,17 @@ const navItems = [
     { name: 'Settings', href: '/dashboard/settings', icon: FiSettings },
 ];
 
-export default function Sidebar() {
+interface SidebarProps {
+    className?: string;
+    onNavigate?: () => void;
+}
+
+export default function Sidebar({ className, onNavigate }: SidebarProps) {
     const pathname = usePathname();
     const { user, logout } = useAuth();
 
     return (
-        <aside className="w-64 bg-gray-900 text-white flex flex-col flex-shrink-0 transition-all duration-300">
+        <aside className={`w-64 bg-gray-900 text-white flex flex-col flex-shrink-0 transition-all duration-300 ${className || ''}`}>
             {/* Logo */}
             <div className="p-5 border-b border-gray-800">
                 <Link href="/" className="flex items-center gap-2">
@@ -47,6 +52,7 @@ export default function Sidebar() {
                                 ? 'bg-blue-600 text-white'
                                 : 'text-gray-400 hover:bg-gray-800 hover:text-white'
                                 }`}
+                            onClick={onNavigate}
                         >
                             <Icon size={20} />
                             <span className="font-medium">{item.name}</span>
@@ -70,7 +76,10 @@ export default function Sidebar() {
                     <FiChevronDown className="text-gray-400" />
                 </div>
                 <button
-                    onClick={logout}
+                    onClick={() => {
+                        logout();
+                        onNavigate?.();
+                    }}
                     className="w-full mt-2 flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400 hover:bg-gray-800 hover:text-white transition-all"
                 >
                     <FiLogOut size={20} />
@@ -83,17 +92,27 @@ export default function Sidebar() {
 
 interface TopBarProps {
     userName?: string;
+    onMenuClick?: () => void;
 }
 
-export function TopBar({ userName }: TopBarProps) {
+export function TopBar({ userName, onMenuClick }: TopBarProps) {
     const { user } = useAuth();
     const displayName = userName || user?.name || 'User';
 
     return (
         <header className="h-16 bg-white border-b flex items-center justify-between px-6 sticky top-0 z-30">
-            <div>
-                <h1 className="text-xl font-bold text-gray-800">Dashboard</h1>
-                <p className="text-sm text-gray-500">Welcome back, {displayName}!</p>
+            <div className="flex items-center gap-3">
+                <button
+                    type="button"
+                    className="md:hidden p-2 rounded-lg text-gray-600 hover:bg-gray-100"
+                    onClick={onMenuClick}
+                >
+                    <FiMenu size={20} />
+                </button>
+                <div>
+                    <h1 className="text-xl font-bold text-gray-800">Dashboard</h1>
+                    <p className="text-sm text-gray-500">Welcome back, {displayName}!</p>
+                </div>
             </div>
             <div className="flex items-center gap-4">
                 <button className="relative p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg">

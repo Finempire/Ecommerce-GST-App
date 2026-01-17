@@ -45,6 +45,10 @@ export async function extractTextFromPDF(pdfPath: string): Promise<string> {
         formData.append('language', 'eng');
         formData.append('isTable', 'true'); // Important for bank statements
         formData.append('OCREngine', '2'); // Engine 2 is better for numbers and special characters
+        formData.append('scale', 'true'); // Improve OCR accuracy for smaller text
+        formData.append('detectOrientation', 'true');
+        formData.append('isOverlayRequired', 'false');
+        formData.append('filetype', 'PDF');
 
         const response = await axios.post('https://api.ocr.space/parse/image', formData, {
             headers: {
@@ -85,7 +89,11 @@ export function parseBankStatementText(text: string): BankStatementData {
     // Normalizing text: replace \r\n with \n
     const normalizedText = text.replace(/\r\n/g, '\n');
 
-    const lines = normalizedText.split('\n').map(line => line.trim()).filter(line => line);
+    const lines = normalizedText
+        .split('\n')
+        .map(line => line.replace(/\s+/g, ' ').trim())
+        .filter(line => line);
+    const combinedLines: string[] = [];
     const transactions: BankTransaction[] = [];
 
     let accountNumber: string | undefined;
@@ -166,6 +174,24 @@ export function parseBankStatementText(text: string): BankStatementData {
         }
     }
 
+    const dateLinePattern = /^(\d{2}[\/\-]\d{2}[\/\-]\d{2,4}|\d{2}\s+[A-Za-z]{3}\s+\d{2,4})/;
+    const headerPattern = /(date|narration|description|withdrawal|deposit|credit|debit|balance|chq|ref|transaction)/i;
+
+    for (const line of lines) {
+        if (headerPattern.test(line)) {
+            continue;
+        }
+
+        if (dateLinePattern.test(line)) {
+            combinedLines.push(line);
+            continue;
+        }
+
+        if (combinedLines.length > 0) {
+            combinedLines[combinedLines.length - 1] = `${combinedLines[combinedLines.length - 1]} ${line}`.trim();
+        }
+    }
+
     // Parse transactions
     // Common date formats in Indian bank statements
     const datePatterns = [
@@ -173,8 +199,8 @@ export function parseBankStatementText(text: string): BankStatementData {
         /(\d{2}\s+[A-Za-z]{3}\s+\d{2,4})/,   // DD MMM YYYY
     ];
 
-    for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
+    for (let i = 0; i < combinedLines.length; i++) {
+        const line = combinedLines[i];
 
         // Try to find a date at the start of line
         let dateMatch: RegExpMatchArray | null = null;
@@ -206,38 +232,19 @@ export function parseBankStatementText(text: string): BankStatementData {
  * Parse a single transaction line
  */
 function parseTransactionLine(line: string, date: string): BankTransaction | null {
-    // Extract amounts - looking for patterns like "1,234.56" or "1234.56"
-    const amountPattern = /([\d,]+\.?\d{2})/g; // More strict on 2 decimal places for accuracy? 
-    // Relaxed to catch integers or 2 decimals
-    const relaxedAmountPattern = /([\d,]+\.?\d*)/g;
-
-    // Use relaxed but ignore single small numbers which might be dates parts or serial numbers if extracted badly
-    const amounts: number[] = [];
-    let match;
-
-    while ((match = relaxedAmountPattern.exec(line)) !== null) {
-        // Filter: amount must not be a date part (e.g. 2023) if it appears in date
-        // But amount could be anything.
-        // Let's rely on basic parsing first.
-        const amount = parseAmount(match[1]);
-        if (amount > 0) {
-            amounts.push(amount);
-        }
-    }
+    const lineWithoutDate = line.replace(date, '').replace(/\s+/g, ' ').trim();
+    const amountPattern = /\b\d{1,3}(?:,\d{3})*(?:\.\d{2})\b|\b\d+\.\d{2}\b/g;
+    const relaxedAmountPattern = /\b\d[\d,]*\.?\d*\b/g;
+    const amountMatches = lineWithoutDate.match(amountPattern) || lineWithoutDate.match(relaxedAmountPattern) || [];
+    const amounts = amountMatches
+        .map((match) => parseAmount(match))
+        .filter((amount) => amount > 0);
 
     if (amounts.length === 0) return null;
 
-    // Extract description (text between date and amounts)
-    let description = line
-        .replace(date, '')
-        .replace(/[\d,]+\.?\d*/g, '')
-        .replace(/\s+/g, ' ')
-        .trim();
+    const isDebit = /DR|DEBIT|PAID|WITHDRAWN|TRANSFER\s*TO|WITHDRAWAL/i.test(lineWithoutDate);
+    const isCredit = /CR|CREDIT|RECEIVED|DEPOSITED|TRANSFER\s*FROM|DEPOSIT/i.test(lineWithoutDate);
 
-    // Clean up description
-    description = description.replace(/^[\s\W]+|[\s\W]+$/g, '');
-
-    // Detect transaction mode
     let mode: string | undefined;
     const modePatterns = [
         { pattern: /UPI|IMPS|NEFT|RTGS/i, mode: 'UPI/IMPS/NEFT' },
@@ -250,63 +257,66 @@ function parseTransactionLine(line: string, date: string): BankTransaction | nul
     ];
 
     for (const mp of modePatterns) {
-        if (mp.pattern.test(description)) {
+        if (mp.pattern.test(lineWithoutDate)) {
             mode = mp.mode;
             break;
         }
     }
 
-    // Extract reference number
     let reference: string | undefined;
-    const refMatch = description.match(/([A-Z0-9]{12,20})/);
-    if (refMatch) {
-        reference = refMatch[1];
+    const referencePatterns = [
+        /(?:UTR|UPI|IMPS|NEFT|RTGS|RRN|REF|CHQ|CHEQUE)\s*[:\-]?\s*([A-Z0-9\/-]{6,})/i,
+        /\b[A-Z0-9]{10,}\b/
+    ];
+
+    for (const pattern of referencePatterns) {
+        const match = lineWithoutDate.match(pattern);
+        if (match) {
+            reference = match[1] || match[0];
+            break;
+        }
     }
 
-    // Determine debit/credit based on keywords or position
-    // OCR Engine 2 preserves table structure often by spacing
-    // But since we split by line, we rely on token order
+    let description = lineWithoutDate
+        .replace(relaxedAmountPattern, '')
+        .replace(/\bCR\b|\bDR\b/gi, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    if (reference) {
+        description = description.replace(reference, '').replace(/\s+/g, ' ').trim();
+    }
+
+    description = description.replace(/^[\s\W]+|[\s\W]+$/g, '');
+
     let debit: number | undefined;
     let credit: number | undefined;
     let balance: number | undefined;
 
-    const isDebit = /DR|DEBIT|PAID|WITHDRAWN|TRANSFER\s*TO/i.test(line);
-    const isCredit = /CR|CREDIT|RECEIVED|DEPOSITED|TRANSFER\s*FROM/i.test(line);
-
-    // Heuristics for amounts if multiple found
-    if (amounts.length >= 2) {
-        // Typically: [Withdrawal, Deposit, Balance] or [Amount, Balance]
-        // If we have 3 amounts: likely Debit, Credit, Balance (one being 0 or missing in text, but extracted as list)
-        // With regex, we only capture numbers.
-
-        // If 2 amounts: Could be (Debit, Balance) or (Credit, Balance)
-        // Logic: Balance is usually the last one and largest? No, balance varies.
-        // Usually Balance is the last number in the line.
-        balance = amounts[amounts.length - 1];
-
-        const transactionAmount = amounts[0]; // First number is likely the txn amount
-
-        if (isCredit) {
+    if (amounts.length >= 3) {
+        const lastThree = amounts.slice(-3);
+        const [possibleDebit, possibleCredit, possibleBalance] = lastThree;
+        balance = possibleBalance;
+        if (isCredit && !isDebit) {
+            credit = possibleCredit || possibleDebit;
+        } else if (isDebit && !isCredit) {
+            debit = possibleDebit;
+        } else {
+            debit = possibleDebit;
+            credit = possibleCredit;
+        }
+    } else if (amounts.length === 2) {
+        const [transactionAmount, possibleBalance] = amounts.slice(-2);
+        balance = possibleBalance;
+        if (isCredit && !isDebit) {
             credit = transactionAmount;
-        } else if (isDebit) {
+        } else if (isDebit && !isCredit) {
             debit = transactionAmount;
         } else {
-            // No clear keyword, guess based on logic? 
-            // In a simple generic parser, hard to be 100% sure without column position.
-            // Default to debit if unknown, or maybe check if there's a middle number?
-            if (amounts.length === 3) {
-                // Am1, Am2, Am3 -> likely Debit (Am1), Credit (Am2), Balance (Am3)
-                // One of Am1 or Am2 is usually 0 if it was captured as 0.00
-                // But regex excludes 0.
-                // This is tricky. Let's assume Credit if description says Deposit?
-            }
-            // Fallback: Assume debit for safety? Or leave undefined?
-            debit = transactionAmount; // Most txns are debits (expenses)
+            debit = transactionAmount;
         }
-    } else if (amounts.length === 1) {
-        // Only one amount found. Is it the txn amount or balance?
-        // Usually txn amount.
-        if (isCredit) {
+    } else {
+        if (isCredit && !isDebit) {
             credit = amounts[0];
         } else {
             debit = amounts[0];
@@ -315,7 +325,7 @@ function parseTransactionLine(line: string, date: string): BankTransaction | nul
 
     return {
         date: normalizeDate(date),
-        description: description.substring(0, 100), // Limit length
+        description: description.substring(0, 100),
         reference,
         debit,
         credit,
