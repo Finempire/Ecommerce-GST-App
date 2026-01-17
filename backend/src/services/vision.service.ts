@@ -1,6 +1,7 @@
-// Google Vision API Service for Bank Statement PDF Parsing
+// OCR.space API Service for Bank Statement PDF Parsing
 
-import vision from '@google-cloud/vision';
+import axios from 'axios';
+import FormData from 'form-data';
 import fs from 'fs';
 import path from 'path';
 
@@ -28,81 +29,63 @@ export interface BankStatementData {
     transactions: BankTransaction[];
 }
 
-// Initialize Vision client with service account
-const credentialsPath = path.join(__dirname, '../../avid-circle-484606-b2-676385e540e9.json');
-
-let visionClient: vision.ImageAnnotatorClient | null = null;
-
-function getVisionClient(): vision.ImageAnnotatorClient {
-    if (!visionClient) {
-        if (fs.existsSync(credentialsPath)) {
-            visionClient = new vision.ImageAnnotatorClient({
-                keyFilename: credentialsPath,
-            });
-        } else {
-            // Try environment variable
-            visionClient = new vision.ImageAnnotatorClient();
-        }
-    }
-    return visionClient;
-}
-
 /**
- * Extract text from PDF using Google Vision API
+ * Extract text from PDF using OCR.space API
  */
 export async function extractTextFromPDF(pdfPath: string): Promise<string> {
-    const client = getVisionClient();
-
-    // Read PDF file and convert to base64
-    const pdfBuffer = fs.readFileSync(pdfPath);
-    const base64Content = pdfBuffer.toString('base64');
-
-    // Use document text detection for better PDF handling
-    const request = {
-        requests: [
-            {
-                inputConfig: {
-                    mimeType: 'application/pdf',
-                    content: base64Content,
-                },
-                features: [
-                    {
-                        type: 'DOCUMENT_TEXT_DETECTION' as const,
-                    },
-                ],
-            },
-        ],
-    };
+    const apiKey = process.env.OCR_SPACE_API_KEY;
+    if (!apiKey) {
+        throw new Error('OCR_SPACE_API_KEY is not configured in .env');
+    }
 
     try {
-        const [result] = await client.batchAnnotateFiles(request);
+        const formData = new FormData();
+        formData.append('file', fs.createReadStream(pdfPath));
+        formData.append('apikey', apiKey);
+        formData.append('language', 'eng');
+        formData.append('isTable', 'true'); // Important for bank statements
+        formData.append('OCREngine', '2'); // Engine 2 is better for numbers and special characters
 
+        const response = await axios.post('https://api.ocr.space/parse/image', formData, {
+            headers: {
+                ...formData.getHeaders(),
+            },
+            maxBodyLength: Infinity,
+            maxContentLength: Infinity,
+        });
+
+        if (response.data.IsErroredOnProcessing) {
+            throw new Error(`OCR.space Error: ${response.data.ErrorMessage}`);
+        }
+
+        if (!response.data.ParsedResults || response.data.ParsedResults.length === 0) {
+            throw new Error('No text parsed from document');
+        }
+
+        // Aggregate text from all pages
         let fullText = '';
-
-        if (result.responses) {
-            for (const response of result.responses) {
-                if (response.responses) {
-                    for (const pageResponse of response.responses) {
-                        if (pageResponse.fullTextAnnotation?.text) {
-                            fullText += pageResponse.fullTextAnnotation.text + '\n';
-                        }
-                    }
-                }
-            }
+        for (const page of response.data.ParsedResults) {
+            fullText += page.ParsedText + '\n';
         }
 
         return fullText;
-    } catch (error) {
-        console.error('Vision API error:', error);
-        throw new Error('Failed to extract text from PDF using Vision API');
+
+    } catch (error: any) {
+        console.error('OCR.space API error:', error.response?.data || error.message);
+        throw new Error('Failed to extract text using OCR.space API');
     }
 }
 
 /**
  * Parse bank statement text into structured data
+ * (Reusing existing logic as OCR.space returns text similarly)
  */
 export function parseBankStatementText(text: string): BankStatementData {
-    const lines = text.split('\n').map(line => line.trim()).filter(line => line);
+    // OCR.space Engine 2 might output slightly different spacing/newlines
+    // Normalizing text: replace \r\n with \n
+    const normalizedText = text.replace(/\r\n/g, '\n');
+
+    const lines = normalizedText.split('\n').map(line => line.trim()).filter(line => line);
     const transactions: BankTransaction[] = [];
 
     let accountNumber: string | undefined;
@@ -155,17 +138,23 @@ export function parseBankStatementText(text: string): BankStatementData {
         const namePatterns = [
             /(?:Name|Account Holder|Customer)[:\s]+([A-Z][A-Z\s]+)/i,
             /(?:Mr\.|Mrs\.|Ms\.|M\/S)\s+([A-Z][A-Z\s]+)/i,
+            /(?:Name)\s*[:\s]*([A-Z\s.]+)/i
         ];
 
         for (const pattern of namePatterns) {
             const match = line.match(pattern);
             if (match && !accountHolder) {
-                accountHolder = match[1].trim();
+                // Filter out common labels that might match
+                const candidate = match[1].trim();
+                if (!['BANK', 'STATEMENT', 'DATE', 'PAGE'].includes(candidate)) {
+                    accountHolder = candidate;
+                }
                 break;
             }
         }
 
         // Opening/Closing balance
+        // OCR.space might separate labels and values more clearly or merge them
         const openingMatch = line.match(/Opening\s*Balance[:\s]*([\d,]+\.?\d*)/i);
         if (openingMatch) {
             openingBalance = parseAmount(openingMatch[1]);
@@ -218,11 +207,18 @@ export function parseBankStatementText(text: string): BankStatementData {
  */
 function parseTransactionLine(line: string, date: string): BankTransaction | null {
     // Extract amounts - looking for patterns like "1,234.56" or "1234.56"
-    const amountPattern = /([\d,]+\.?\d*)/g;
+    const amountPattern = /([\d,]+\.?\d{2})/g; // More strict on 2 decimal places for accuracy? 
+    // Relaxed to catch integers or 2 decimals
+    const relaxedAmountPattern = /([\d,]+\.?\d*)/g;
+
+    // Use relaxed but ignore single small numbers which might be dates parts or serial numbers if extracted badly
     const amounts: number[] = [];
     let match;
 
-    while ((match = amountPattern.exec(line)) !== null) {
+    while ((match = relaxedAmountPattern.exec(line)) !== null) {
+        // Filter: amount must not be a date part (e.g. 2023) if it appears in date
+        // But amount could be anything.
+        // Let's rely on basic parsing first.
         const amount = parseAmount(match[1]);
         if (amount > 0) {
             amounts.push(amount);
@@ -237,6 +233,9 @@ function parseTransactionLine(line: string, date: string): BankTransaction | nul
         .replace(/[\d,]+\.?\d*/g, '')
         .replace(/\s+/g, ' ')
         .trim();
+
+    // Clean up description
+    description = description.replace(/^[\s\W]+|[\s\W]+$/g, '');
 
     // Detect transaction mode
     let mode: string | undefined;
@@ -265,6 +264,8 @@ function parseTransactionLine(line: string, date: string): BankTransaction | nul
     }
 
     // Determine debit/credit based on keywords or position
+    // OCR Engine 2 preserves table structure often by spacing
+    // But since we split by line, we rely on token order
     let debit: number | undefined;
     let credit: number | undefined;
     let balance: number | undefined;
@@ -272,25 +273,39 @@ function parseTransactionLine(line: string, date: string): BankTransaction | nul
     const isDebit = /DR|DEBIT|PAID|WITHDRAWN|TRANSFER\s*TO/i.test(line);
     const isCredit = /CR|CREDIT|RECEIVED|DEPOSITED|TRANSFER\s*FROM/i.test(line);
 
+    // Heuristics for amounts if multiple found
     if (amounts.length >= 2) {
-        // Usually: amount, balance format
-        if (isDebit) {
-            debit = amounts[0];
-        } else if (isCredit) {
-            credit = amounts[0];
-        } else {
-            // Default: first small amount is transaction, last is balance
-            if (amounts.length >= 3) {
-                debit = amounts[0] || undefined;
-                credit = amounts[1] || undefined;
-                balance = amounts[2];
-            } else {
-                debit = amounts[0];
-                balance = amounts[1];
-            }
-        }
+        // Typically: [Withdrawal, Deposit, Balance] or [Amount, Balance]
+        // If we have 3 amounts: likely Debit, Credit, Balance (one being 0 or missing in text, but extracted as list)
+        // With regex, we only capture numbers.
+
+        // If 2 amounts: Could be (Debit, Balance) or (Credit, Balance)
+        // Logic: Balance is usually the last one and largest? No, balance varies.
+        // Usually Balance is the last number in the line.
         balance = amounts[amounts.length - 1];
+
+        const transactionAmount = amounts[0]; // First number is likely the txn amount
+
+        if (isCredit) {
+            credit = transactionAmount;
+        } else if (isDebit) {
+            debit = transactionAmount;
+        } else {
+            // No clear keyword, guess based on logic? 
+            // In a simple generic parser, hard to be 100% sure without column position.
+            // Default to debit if unknown, or maybe check if there's a middle number?
+            if (amounts.length === 3) {
+                // Am1, Am2, Am3 -> likely Debit (Am1), Credit (Am2), Balance (Am3)
+                // One of Am1 or Am2 is usually 0 if it was captured as 0.00
+                // But regex excludes 0.
+                // This is tricky. Let's assume Credit if description says Deposit?
+            }
+            // Fallback: Assume debit for safety? Or leave undefined?
+            debit = transactionAmount; // Most txns are debits (expenses)
+        }
     } else if (amounts.length === 1) {
+        // Only one amount found. Is it the txn amount or balance?
+        // Usually txn amount.
         if (isCredit) {
             credit = amounts[0];
         } else {

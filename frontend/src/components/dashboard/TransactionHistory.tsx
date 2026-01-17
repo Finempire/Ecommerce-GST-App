@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { FiDownload, FiEye, FiFilter, FiSearch, FiLoader } from 'react-icons/fi';
 import { uploadsApi, Upload } from '@/lib/api';
@@ -22,6 +23,7 @@ export default function TransactionHistory({ recentUploads }: TransactionHistory
     const [isLoading, setIsLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [filterPlatform, setFilterPlatform] = useState('All');
+    const router = useRouter(); // Added router
 
     useEffect(() => {
         const fetchUploads = async () => {
@@ -177,7 +179,11 @@ export default function TransactionHistory({ recentUploads }: TransactionHistory
                                     </td>
                                     <td className="px-5 py-4">
                                         <div className="flex items-center gap-2">
-                                            <button className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
+                                            <button
+                                                onClick={() => router.push(`/dashboard/uploads/${upload.id}`)}
+                                                className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                                title="View Details"
+                                            >
                                                 <FiEye size={16} />
                                             </button>
                                             {upload.status === 'completed' && (

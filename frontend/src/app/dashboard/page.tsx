@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Sidebar, { TopBar } from '@/components/dashboard/Sidebar';
 import StatCards from '@/components/dashboard/StatCards';
 import FileUpload from '@/components/dashboard/FileUpload';
 import TransactionHistory from '@/components/dashboard/TransactionHistory';
@@ -59,76 +58,68 @@ export default function DashboardPage() {
     }
 
     return (
-        <div className="min-h-screen bg-gray-100">
-            <Sidebar />
-
-            <div className="ml-64">
-                <TopBar userName={user?.name} />
-
-                <main className="p-6 space-y-6">
-                    {/* Welcome banner */}
-                    <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-xl p-6 text-white">
-                        <h1 className="text-2xl font-bold mb-2">Welcome back, {user?.name || 'User'}! 👋</h1>
-                        <p className="text-indigo-100">
-                            Upload your e-commerce data to generate GST reports and Tally XML files.
-                        </p>
-                    </div>
-
-                    {/* Stats */}
-                    <StatCards stats={stats} isLoading={isLoading} />
-
-                    {/* Main Grid */}
-                    <div className="grid lg:grid-cols-3 gap-6">
-                        {/* File Upload */}
-                        <div className="lg:col-span-1">
-                            <FileUpload onUploadComplete={() => {
-                                // Refresh stats when upload completes
-                                reportsApi.getDashboardStats().then(response => {
-                                    if (response.success && response.data) {
-                                        setStats(response.data);
-                                    }
-                                });
-                            }} />
-                        </div>
-
-                        {/* Quick Actions */}
-                        <div className="lg:col-span-2">
-                            <div className="bg-white rounded-xl shadow-lg p-6">
-                                <h2 className="text-lg font-bold text-gray-800 mb-4">Quick Actions</h2>
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                    <QuickActionCard
-                                        title="Generate GSTR-1"
-                                        icon="📊"
-                                        color="bg-blue-100"
-                                        onClick={() => router.push('/dashboard/reports?type=gstr1')}
-                                    />
-                                    <QuickActionCard
-                                        title="Export to Tally"
-                                        icon="📁"
-                                        color="bg-purple-100"
-                                        onClick={() => router.push('/dashboard/reports?type=tally')}
-                                    />
-                                    <QuickActionCard
-                                        title="Download JSON"
-                                        icon="📋"
-                                        color="bg-green-100"
-                                        onClick={() => router.push('/dashboard/reports?type=json')}
-                                    />
-                                    <QuickActionCard
-                                        title="View Reports"
-                                        icon="📈"
-                                        color="bg-orange-100"
-                                        onClick={() => router.push('/dashboard/reports')}
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Transaction History */}
-                    <TransactionHistory recentUploads={stats?.recent_uploads} />
-                </main>
+        <div className="space-y-6">
+            {/* Welcome banner */}
+            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-xl p-6 text-white">
+                <h1 className="text-2xl font-bold mb-2">Welcome back, {user?.name || 'User'}! 👋</h1>
+                <p className="text-indigo-100">
+                    Upload your e-commerce data to generate GST reports and Tally XML files.
+                </p>
             </div>
+
+            {/* Stats */}
+            <StatCards stats={stats} isLoading={isLoading} />
+
+            {/* Main Grid */}
+            <div className="grid xl:grid-cols-3 gap-6">
+                {/* File Upload */}
+                <div className="xl:col-span-1">
+                    <FileUpload onUploadComplete={() => {
+                        // Refresh stats when upload completes
+                        reportsApi.getDashboardStats().then(response => {
+                            if (response.success && response.data) {
+                                setStats(response.data);
+                            }
+                        });
+                    }} />
+                </div>
+
+                {/* Quick Actions */}
+                <div className="xl:col-span-2">
+                    <div className="bg-white rounded-xl shadow-lg p-6">
+                        <h2 className="text-lg font-bold text-gray-800 mb-4">Quick Actions</h2>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <QuickActionCard
+                                title="Generate GSTR-1"
+                                icon="📊"
+                                color="bg-blue-100"
+                                onClick={() => router.push('/dashboard/reports?type=gstr1')}
+                            />
+                            <QuickActionCard
+                                title="Export to Tally"
+                                icon="📁"
+                                color="bg-purple-100"
+                                onClick={() => router.push('/dashboard/reports?type=tally')}
+                            />
+                            <QuickActionCard
+                                title="Download JSON"
+                                icon="📋"
+                                color="bg-green-100"
+                                onClick={() => router.push('/dashboard/reports?type=json')}
+                            />
+                            <QuickActionCard
+                                title="View Reports"
+                                icon="📈"
+                                color="bg-orange-100"
+                                onClick={() => router.push('/dashboard/reports')}
+                            />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Transaction History */}
+            <TransactionHistory recentUploads={stats?.recent_uploads} />
         </div>
     );
 }

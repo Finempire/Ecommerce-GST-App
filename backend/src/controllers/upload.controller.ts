@@ -78,6 +78,7 @@ export const getUploads = async (req: AuthRequest, res: Response, next: NextFunc
  */
 export const getUploadStatus = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
+        console.log(`[DEBUG] Fetching status for upload: ${req.params.id} user: ${req.user!.id}`);
         const result = await query(
             `SELECT id, file_name, status, platform_name, created_at, processed_at
              FROM uploads
