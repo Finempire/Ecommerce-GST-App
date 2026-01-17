@@ -105,10 +105,10 @@ function parseExcelOrCSV(filePath: string): any[] {
 }
 
 async function parsePDF(filePath: string): Promise<any[]> {
-    // Try Google Vision API first for better OCR
+    // Try OCR.space API first for better OCR
     try {
         const { parseBankStatementPDF } = await import('./vision.service');
-        console.log('Using Google Vision API for PDF parsing...');
+        console.log('Using OCR.space API for PDF parsing...');
 
         const bankData = await parseBankStatementPDF(filePath);
 
@@ -123,7 +123,7 @@ async function parsePDF(filePath: string): Promise<any[]> {
             mode: txn.mode,
         }));
     } catch (visionError) {
-        console.warn('Vision API failed, falling back to pdf-parse:', visionError);
+        console.warn('OCR.space parsing failed, falling back to pdf-parse:', visionError);
 
         // Fallback to basic PDF text extraction
         const pdfParse = require('pdf-parse');
@@ -266,7 +266,7 @@ function parsePaytmData(data: any[]): ParsedTransaction[] {
 
 function parseBankStatement(data: any[]): ParsedTransaction[] {
     return data.map((row) => ({
-        order_id: row['Reference'] || row['Ref No'] || uuidv4(),
+        order_id: row['Reference'] || row['Ref No'] || row['reference'] || uuidv4(),
         transaction_date: parseDate(row['date'] || row['Date'] || row['Transaction Date']),
         description: row['description'] || row['Narration'] || row['Description'] || '',
         quantity: 1,
