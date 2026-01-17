@@ -105,34 +105,55 @@ function parseExcelOrCSV(filePath: string): any[] {
 }
 
 async function parsePDF(filePath: string): Promise<any[]> {
-    // Basic PDF text extraction (for bank statements)
-    const pdfParse = require('pdf-parse');
-    const dataBuffer = fs.readFileSync(filePath);
-    const data = await pdfParse(dataBuffer);
+    // Try Google Vision API first for better OCR
+    try {
+        const { parseBankStatementPDF } = await import('./vision.service');
+        console.log('Using Google Vision API for PDF parsing...');
 
-    // Parse text into lines and extract transactions
-    const lines = data.text.split('\n').filter((line: string) => line.trim());
-    const transactions: any[] = [];
+        const bankData = await parseBankStatementPDF(filePath);
 
-    // Simple pattern matching for bank statement lines
-    const datePattern = /(\d{2}[\/\-]\d{2}[\/\-]\d{4})/;
-    const amountPattern = /([\d,]+\.\d{2})/g;
+        // Convert Vision API results to standard format
+        return bankData.transactions.map(txn => ({
+            date: txn.date,
+            description: txn.description,
+            amount: txn.credit || txn.debit || 0,
+            type: txn.credit ? 'credit' : 'debit',
+            reference: txn.reference,
+            balance: txn.balance,
+            mode: txn.mode,
+        }));
+    } catch (visionError) {
+        console.warn('Vision API failed, falling back to pdf-parse:', visionError);
 
-    for (const line of lines) {
-        const dateMatch = line.match(datePattern);
-        const amounts = line.match(amountPattern);
+        // Fallback to basic PDF text extraction
+        const pdfParse = require('pdf-parse');
+        const dataBuffer = fs.readFileSync(filePath);
+        const data = await pdfParse(dataBuffer);
 
-        if (dateMatch && amounts && amounts.length >= 1) {
-            transactions.push({
-                date: dateMatch[1],
-                description: line.replace(datePattern, '').replace(amountPattern, '').trim(),
-                amount: parseFloat(amounts[0].replace(/,/g, '')),
-                type: amounts.length > 1 ? 'debit' : 'credit',
-            });
+        // Parse text into lines and extract transactions
+        const lines = data.text.split('\n').filter((line: string) => line.trim());
+        const transactions: any[] = [];
+
+        // Simple pattern matching for bank statement lines
+        const datePattern = /(\d{2}[\/\-]\d{2}[\/\-]\d{4})/;
+        const amountPattern = /([\d,]+\.\d{2})/g;
+
+        for (const line of lines) {
+            const dateMatch = line.match(datePattern);
+            const amounts = line.match(amountPattern);
+
+            if (dateMatch && amounts && amounts.length >= 1) {
+                transactions.push({
+                    date: dateMatch[1],
+                    description: line.replace(datePattern, '').replace(amountPattern, '').trim(),
+                    amount: parseFloat(amounts[0].replace(/,/g, '')),
+                    type: amounts.length > 1 ? 'debit' : 'credit',
+                });
+            }
         }
-    }
 
-    return transactions;
+        return transactions;
+    }
 }
 
 // Platform-specific parsers

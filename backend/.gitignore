@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+dist/
+
+# Environment files
+.env
+.env.local
+.env.production
+
+# Upload directory
+uploads/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Build outputs
+build/
+
+# Test coverage
+coverage/
+
+# Google Cloud credentials (DO NOT COMMIT)
+*-*.json
+!package.json
+!package-lock.json
+!tsconfig.json
