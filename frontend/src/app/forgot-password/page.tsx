@@ -3,20 +3,33 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { FiMail, FiArrowRight, FiArrowLeft, FiCheck } from 'react-icons/fi';
+import { FiMail, FiArrowRight, FiArrowLeft, FiCheck, FiAlertCircle } from 'react-icons/fi';
+import { authApi } from '@/lib/api';
 
 export default function ForgotPasswordPage() {
     const [email, setEmail] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSubmitted, setIsSubmitted] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setError(null);
         setIsSubmitting(true);
-        setTimeout(() => {
+
+        try {
+            const response = await authApi.forgotPassword(email);
+
+            if (response.success) {
+                setIsSubmitted(true);
+            } else {
+                setError(response.error || 'Failed to send reset link. Please try again.');
+            }
+        } catch (err) {
+            setError('An error occurred. Please try again later.');
+        } finally {
             setIsSubmitting(false);
-            setIsSubmitted(true);
-        }, 1500);
+        }
     };
 
     return (
@@ -33,7 +46,7 @@ export default function ForgotPasswordPage() {
                 className="relative z-10 w-full max-w-md"
             >
                 {/* Logo */}
-                <Link href="/" className="flex items-center justify-center gap-2 mb-8">
+                <Link href="/" className="flex items-center justify-center gap-2 mb-8 no-underline">
                     <div className="w-12 h-12 rounded-xl gradient-primary flex items-center justify-center">
                         <span className="text-white font-bold text-2xl">G</span>
                     </div>
@@ -59,7 +72,7 @@ export default function ForgotPasswordPage() {
                             </p>
                             <Link
                                 href="/login"
-                                className="inline-flex items-center gap-2 text-blue-600 font-semibold hover:underline"
+                                className="inline-flex items-center gap-2 text-blue-600 font-semibold hover:underline no-underline"
                             >
                                 <FiArrowLeft />
                                 Back to Login
@@ -73,6 +86,14 @@ export default function ForgotPasswordPage() {
                             <p className="text-gray-500 text-center mb-8">
                                 No worries! Enter your email and we&apos;ll send you a reset link.
                             </p>
+
+                            {/* Error Message */}
+                            {error && (
+                                <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3 text-red-700">
+                                    <FiAlertCircle className="flex-shrink-0" />
+                                    <span className="text-sm">{error}</span>
+                                </div>
+                            )}
 
                             <form onSubmit={handleSubmit} className="space-y-4">
                                 <div>
@@ -112,7 +133,7 @@ export default function ForgotPasswordPage() {
 
                             <p className="text-center text-gray-600 text-sm mt-6">
                                 Remember your password?{' '}
-                                <Link href="/login" className="text-blue-600 font-semibold hover:underline">
+                                <Link href="/login" className="text-blue-600 font-semibold hover:underline no-underline">
                                     Sign in
                                 </Link>
                             </p>
