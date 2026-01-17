@@ -27,6 +27,7 @@ export interface RegisterData {
     email: string;
     password: string;
     name: string;
+    role?: string;
     whatsapp_number?: string;
     gstin?: string;
     business_name?: string;
