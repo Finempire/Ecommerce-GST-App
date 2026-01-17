@@ -2,23 +2,51 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { FiMail, FiPhone, FiLock, FiEye, FiEyeOff, FiArrowRight } from 'react-icons/fi';
+import { FiMail, FiPhone, FiLock, FiEye, FiEyeOff, FiArrowRight, FiAlertCircle } from 'react-icons/fi';
+import { useAuth } from '@/context/AuthContext';
 
 export default function LoginPage() {
+    const router = useRouter();
+    const { login, isLoading: authLoading } = useAuth();
+
     const [showPassword, setShowPassword] = useState(false);
     const [loginMethod, setLoginMethod] = useState<'email' | 'whatsapp'>('email');
     const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    // Form state
+    const [email, setEmail] = useState('');
+    const [whatsappNumber, setWhatsappNumber] = useState('');
+    const [password, setPassword] = useState('');
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setError(null);
         setIsLoading(true);
-        // Simulate login
-        setTimeout(() => {
+
+        try {
+            const credentials = loginMethod === 'email'
+                ? { email, password }
+                : { whatsapp_number: whatsappNumber, password };
+
+            const response = await login(credentials);
+
+            if (response.success) {
+                router.push('/dashboard');
+            } else {
+                setError(response.error || 'Login failed. Please check your credentials.');
+            }
+        } catch (err: unknown) {
+            const errorMessage = err instanceof Error ? err.message : 'An error occurred during login.';
+            setError(errorMessage);
+        } finally {
             setIsLoading(false);
-            window.location.href = '/dashboard';
-        }, 1500);
+        }
     };
+
+    const buttonDisabled = isLoading || authLoading;
 
     return (
         <div className="min-h-screen gradient-hero flex items-center justify-center p-4">
@@ -52,13 +80,21 @@ export default function LoginPage() {
                         Sign in to continue to your dashboard
                     </p>
 
+                    {/* Error Message */}
+                    {error && (
+                        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3 text-red-700">
+                            <FiAlertCircle className="flex-shrink-0" />
+                            <span className="text-sm">{error}</span>
+                        </div>
+                    )}
+
                     {/* Login Method Toggle */}
                     <div className="flex bg-gray-100 rounded-lg p-1 mb-6">
                         <button
                             onClick={() => setLoginMethod('email')}
                             className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${loginMethod === 'email'
-                                    ? 'bg-white text-blue-600 shadow'
-                                    : 'text-gray-600'
+                                ? 'bg-white text-blue-600 shadow'
+                                : 'text-gray-600'
                                 }`}
                         >
                             <FiMail className="inline mr-2" />
@@ -67,8 +103,8 @@ export default function LoginPage() {
                         <button
                             onClick={() => setLoginMethod('whatsapp')}
                             className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${loginMethod === 'whatsapp'
-                                    ? 'bg-white text-green-600 shadow'
-                                    : 'text-gray-600'
+                                ? 'bg-white text-green-600 shadow'
+                                : 'text-gray-600'
                                 }`}
                         >
                             <FiPhone className="inline mr-2" />
@@ -93,6 +129,11 @@ export default function LoginPage() {
                                 <input
                                     type={loginMethod === 'email' ? 'email' : 'tel'}
                                     placeholder={loginMethod === 'email' ? 'you@example.com' : '+91 98765 43210'}
+                                    value={loginMethod === 'email' ? email : whatsappNumber}
+                                    onChange={(e) => loginMethod === 'email'
+                                        ? setEmail(e.target.value)
+                                        : setWhatsappNumber(e.target.value)
+                                    }
                                     className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
                                     required
                                 />
@@ -111,6 +152,8 @@ export default function LoginPage() {
                                 <input
                                     type={showPassword ? 'text' : 'password'}
                                     placeholder="Enter your password"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
                                     className="w-full pl-10 pr-12 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
                                     required
                                 />
@@ -144,7 +187,7 @@ export default function LoginPage() {
                         {/* Submit Button */}
                         <button
                             type="submit"
-                            disabled={isLoading}
+                            disabled={buttonDisabled}
                             className="w-full btn-primary flex items-center justify-center gap-2 py-4 disabled:opacity-70"
                         >
                             {isLoading ? (

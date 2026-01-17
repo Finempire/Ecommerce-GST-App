@@ -2,33 +2,104 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { FiUser, FiMail, FiPhone, FiLock, FiEye, FiEyeOff, FiBriefcase, FiArrowRight } from 'react-icons/fi';
+import { FiUser, FiMail, FiPhone, FiLock, FiEye, FiEyeOff, FiBriefcase, FiArrowRight, FiAlertCircle, FiCheckCircle } from 'react-icons/fi';
+import { useAuth } from '@/context/AuthContext';
 
 const roles = [
     { id: 'business', name: 'Business Owner', icon: FiBriefcase, description: 'E-commerce seller or business' },
-    { id: 'ca', name: 'CA/Tax Professional', icon: FiUser, description: 'Manage multiple clients' },
+    { id: 'accountant', name: 'CA/Tax Professional', icon: FiUser, description: 'Manage multiple clients' },
     { id: 'admin', name: 'Enterprise Admin', icon: FiUser, description: 'Large organization' },
 ];
 
 export default function RegisterPage() {
+    const router = useRouter();
+    const { register, isLoading: authLoading } = useAuth();
+
     const [showPassword, setShowPassword] = useState(false);
     const [selectedRole, setSelectedRole] = useState('business');
     const [isLoading, setIsLoading] = useState(false);
     const [acceptTerms, setAcceptTerms] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [success, setSuccess] = useState(false);
+
+    // Form state
+    const [name, setName] = useState('');
+    const [email, setEmail] = useState('');
+    const [whatsappNumber, setWhatsappNumber] = useState('');
+    const [password, setPassword] = useState('');
+
+    // Password validation
+    const passwordChecks = {
+        length: password.length >= 8,
+        uppercase: /[A-Z]/.test(password),
+        lowercase: /[a-z]/.test(password),
+        number: /[0-9]/.test(password),
+    };
+
+    const isPasswordValid = Object.values(passwordChecks).every(Boolean);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setError(null);
+
         if (!acceptTerms) {
-            alert('Please accept the terms and conditions');
+            setError('Please accept the terms and conditions');
             return;
         }
+
+        if (!isPasswordValid) {
+            setError('Please ensure your password meets all requirements');
+            return;
+        }
+
         setIsLoading(true);
-        setTimeout(() => {
+
+        try {
+            const response = await register({
+                email,
+                password,
+                name,
+                whatsapp_number: whatsappNumber || undefined,
+            });
+
+            if (response.success) {
+                setSuccess(true);
+                setTimeout(() => {
+                    router.push('/dashboard');
+                }, 1500);
+            } else {
+                setError(response.error || 'Registration failed. Please try again.');
+            }
+        } catch (err: unknown) {
+            const errorMessage = err instanceof Error ? err.message : 'An error occurred during registration.';
+            setError(errorMessage);
+        } finally {
             setIsLoading(false);
-            window.location.href = '/dashboard';
-        }, 1500);
+        }
     };
+
+    const buttonDisabled = isLoading || authLoading || !acceptTerms || !isPasswordValid;
+
+    if (success) {
+        return (
+            <div className="min-h-screen gradient-hero flex items-center justify-center p-4">
+                <motion.div
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    className="bg-white rounded-2xl shadow-2xl p-8 max-w-md text-center"
+                >
+                    <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <FiCheckCircle className="w-10 h-10 text-green-600" />
+                    </div>
+                    <h1 className="text-2xl font-bold text-gray-800 mb-2">Welcome to GSTPro!</h1>
+                    <p className="text-gray-600 mb-6">Your account has been created successfully. Redirecting to dashboard...</p>
+                    <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto" />
+                </motion.div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen gradient-hero flex items-center justify-center p-4 py-12">
@@ -62,6 +133,14 @@ export default function RegisterPage() {
                         Start your 14-day free trial today
                     </p>
 
+                    {/* Error Message */}
+                    {error && (
+                        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3 text-red-700">
+                            <FiAlertCircle className="flex-shrink-0" />
+                            <span className="text-sm">{error}</span>
+                        </div>
+                    )}
+
                     {/* Role Selection */}
                     <div className="mb-6">
                         <label className="block text-sm font-medium text-gray-700 mb-3">
@@ -74,8 +153,8 @@ export default function RegisterPage() {
                                     type="button"
                                     onClick={() => setSelectedRole(role.id)}
                                     className={`p-3 rounded-lg border-2 text-center transition-all ${selectedRole === role.id
-                                            ? 'border-blue-500 bg-blue-50'
-                                            : 'border-gray-200 hover:border-gray-300'
+                                        ? 'border-blue-500 bg-blue-50'
+                                        : 'border-gray-200 hover:border-gray-300'
                                         }`}
                                 >
                                     <role.icon className={`mx-auto mb-1 ${selectedRole === role.id ? 'text-blue-600' : 'text-gray-400'}`} size={20} />
@@ -100,6 +179,8 @@ export default function RegisterPage() {
                                 <input
                                     type="text"
                                     placeholder="Your full name"
+                                    value={name}
+                                    onChange={(e) => setName(e.target.value)}
                                     className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
                                     required
                                 />
@@ -118,6 +199,8 @@ export default function RegisterPage() {
                                 <input
                                     type="email"
                                     placeholder="you@example.com"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
                                     className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
                                     required
                                 />
@@ -127,7 +210,7 @@ export default function RegisterPage() {
                         {/* WhatsApp */}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">
-                                WhatsApp Number
+                                WhatsApp Number <span className="text-gray-400">(Optional)</span>
                             </label>
                             <div className="relative">
                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -136,8 +219,9 @@ export default function RegisterPage() {
                                 <input
                                     type="tel"
                                     placeholder="+91 98765 43210"
+                                    value={whatsappNumber}
+                                    onChange={(e) => setWhatsappNumber(e.target.value)}
                                     className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
-                                    required
                                 />
                             </div>
                         </div>
@@ -154,9 +238,10 @@ export default function RegisterPage() {
                                 <input
                                     type={showPassword ? 'text' : 'password'}
                                     placeholder="Create a strong password"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
                                     className="w-full pl-10 pr-12 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
                                     required
-                                    minLength={8}
                                 />
                                 <button
                                     type="button"
@@ -166,7 +251,20 @@ export default function RegisterPage() {
                                     {showPassword ? <FiEyeOff /> : <FiEye />}
                                 </button>
                             </div>
-                            <p className="text-xs text-gray-500 mt-1">Minimum 8 characters</p>
+                            {/* Password requirements */}
+                            <div className="mt-2 space-y-1">
+                                {[
+                                    { check: passwordChecks.length, text: 'At least 8 characters' },
+                                    { check: passwordChecks.uppercase, text: 'One uppercase letter' },
+                                    { check: passwordChecks.lowercase, text: 'One lowercase letter' },
+                                    { check: passwordChecks.number, text: 'One number' },
+                                ].map((item, i) => (
+                                    <div key={i} className={`flex items-center gap-2 text-xs ${item.check ? 'text-green-600' : 'text-gray-400'}`}>
+                                        <FiCheckCircle className={item.check ? 'text-green-500' : 'text-gray-300'} size={12} />
+                                        {item.text}
+                                    </div>
+                                ))}
+                            </div>
                         </div>
 
                         {/* Terms */}
@@ -192,8 +290,8 @@ export default function RegisterPage() {
                         {/* Submit */}
                         <button
                             type="submit"
-                            disabled={isLoading || !acceptTerms}
-                            className="w-full btn-primary flex items-center justify-center gap-2 py-4 disabled:opacity-70"
+                            disabled={buttonDisabled}
+                            className="w-full btn-primary flex items-center justify-center gap-2 py-4 disabled:opacity-70 disabled:cursor-not-allowed"
                         >
                             {isLoading ? (
                                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />

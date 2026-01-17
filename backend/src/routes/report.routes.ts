@@ -9,6 +9,54 @@ import { generateCSV, generateJSON } from '../services/export.service';
 
 const router = Router();
 
+// Dashboard stats
+router.get('/dashboard', authenticate, async (req: AuthRequest, res, next) => {
+    try {
+        // Get upload count
+        const uploadsResult = await query(
+            'SELECT COUNT(*) as count FROM uploads WHERE user_id = $1',
+            [req.user!.id]
+        );
+
+        // Get transaction stats
+        const transactionsResult = await query(
+            `SELECT 
+                COUNT(*) as total_transactions,
+                COALESCE(SUM(taxable_value), 0) as total_taxable_value,
+                COALESCE(SUM(igst + cgst + sgst), 0) as total_gst
+             FROM transactions t
+             JOIN uploads u ON t.upload_id = u.id
+             WHERE u.user_id = $1`,
+            [req.user!.id]
+        );
+
+        // Get recent uploads
+        const recentResult = await query(
+            `SELECT id, file_name, platform_name, status, created_at
+             FROM uploads
+             WHERE user_id = $1
+             ORDER BY created_at DESC
+             LIMIT 5`,
+            [req.user!.id]
+        );
+
+        const stats = transactionsResult.rows[0];
+
+        res.json({
+            success: true,
+            data: {
+                total_uploads: parseInt(uploadsResult.rows[0].count) || 0,
+                total_transactions: parseInt(stats.total_transactions) || 0,
+                total_taxable_value: parseFloat(stats.total_taxable_value) || 0,
+                total_gst: parseFloat(stats.total_gst) || 0,
+                recent_uploads: recentResult.rows,
+            },
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
 // Generate report
 router.post('/generate', authenticate, async (req: AuthRequest, res, next) => {
     try {
