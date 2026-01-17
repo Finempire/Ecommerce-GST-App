@@ -46,6 +46,9 @@ class ApiClient {
         const data = await response.json();
 
         if (!response.ok) {
+            const errorMessage = typeof data.error === 'string'
+                ? data.error
+                : data?.error?.message || data.message || 'An error occurred';
             // Handle 401 - Unauthorized
             if (response.status === 401) {
                 localStorage.removeItem('auth_token');
@@ -55,7 +58,7 @@ class ApiClient {
 
             throw {
                 status: response.status,
-                message: data.error || data.message || 'An error occurred',
+                message: errorMessage,
                 errors: data.errors,
             } as ApiError;
         }
