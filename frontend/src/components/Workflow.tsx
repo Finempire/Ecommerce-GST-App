@@ -5,16 +5,19 @@ import { FiUploadCloud, FiSearch, FiCheckCircle, FiShield, FiClock, FiZap } from
 
 const steps = [
     {
+        step: '01',
         title: 'Upload marketplace files',
         description: 'Drop your Amazon, Flipkart, or Meesho reports and let GSTPro auto-map fields.',
         icon: FiUploadCloud,
     },
     {
+        step: '02',
         title: 'Review smart summaries',
         description: 'Validate HSN, place-of-supply, and tax splits with guided checks before filing.',
         icon: FiSearch,
     },
     {
+        step: '03',
         title: 'Export ready-to-file outputs',
         description: 'Download GSTR-1 JSON, Tally XML, and clean CSV files instantly.',
         icon: FiCheckCircle,
@@ -41,7 +44,7 @@ const highlights = [
 
 export default function Workflow() {
     return (
-        <section className="section bg-white">
+        <section className="section bg-gray-50">
             <div className="container">
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
@@ -60,30 +63,37 @@ export default function Workflow() {
                     </p>
                 </motion.div>
 
-                <div className="grid lg:grid-cols-3 gap-6 mb-12">
-                    {steps.map((step, index) => {
-                        const Icon = step.icon;
-                        return (
-                            <motion.div
-                                key={step.title}
-                                initial={{ opacity: 0, y: 20 }}
-                                whileInView={{ opacity: 1, y: 0 }}
-                                viewport={{ once: true }}
-                                transition={{ delay: index * 0.1 }}
-                                className="bg-gray-50 rounded-2xl p-6 border border-gray-100 shadow-sm"
-                            >
-                                <div className="w-12 h-12 rounded-xl bg-blue-600/10 text-blue-600 flex items-center justify-center mb-4">
-                                    <Icon size={22} />
-                                </div>
-                                <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                                    {step.title}
-                                </h3>
-                                <p className="text-gray-600 text-sm leading-relaxed">
-                                    {step.description}
-                                </p>
-                            </motion.div>
-                        );
-                    })}
+                <div className="rounded-3xl border border-gray-200 bg-white p-6 md:p-10 shadow-sm mb-12">
+                    <div className="grid lg:grid-cols-3 gap-6">
+                        {steps.map((step, index) => {
+                            const Icon = step.icon;
+                            return (
+                                <motion.div
+                                    key={step.title}
+                                    initial={{ opacity: 0, y: 20 }}
+                                    whileInView={{ opacity: 1, y: 0 }}
+                                    viewport={{ once: true }}
+                                    transition={{ delay: index * 0.1 }}
+                                    className="rounded-2xl border border-gray-100 bg-gray-50/80 p-6"
+                                >
+                                    <div className="flex items-center gap-4 mb-4">
+                                        <div className="text-sm font-semibold text-blue-600 bg-blue-50 rounded-full px-3 py-1">
+                                            Step {step.step}
+                                        </div>
+                                        <div className="w-12 h-12 rounded-xl bg-blue-600/10 text-blue-600 flex items-center justify-center">
+                                            <Icon size={22} />
+                                        </div>
+                                    </div>
+                                    <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                                        {step.title}
+                                    </h3>
+                                    <p className="text-gray-600 text-sm leading-relaxed">
+                                        {step.description}
+                                    </p>
+                                </motion.div>
+                            );
+                        })}
+                    </div>
                 </div>
 
                 <div className="grid md:grid-cols-3 gap-6">
@@ -96,7 +106,7 @@ export default function Workflow() {
                                 whileInView={{ opacity: 1, y: 0 }}
                                 viewport={{ once: true }}
                                 transition={{ delay: index * 0.1 }}
-                                className="flex items-start gap-4 rounded-2xl border border-gray-200 p-6"
+                                className="flex items-start gap-4 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm"
                             >
                                 <span className="w-11 h-11 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 text-white flex items-center justify-center">
                                     <Icon size={20} />
